@@ -19,13 +19,33 @@ IntrotutorialAudioProcessor::IntrotutorialAudioProcessor()
                       #endif
                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
                      #endif
-                       )
+                       ), treeState(*this, nullptr, "PARAMETERS", createParameterLayout())
 #endif
 {
 }
 
 IntrotutorialAudioProcessor::~IntrotutorialAudioProcessor()
 {
+}
+
+juce::AudioProcessorValueTreeState::ParameterLayout IntrotutorialAudioProcessor::createParameterLayout()
+{
+    std::vector <std::unique_ptr<juce::RangedAudioParameter>> params;
+
+    juce::StringArray choices = { "option 1", "option 2", "option 3" };
+
+    // This smart pointer gets deleted whenever it goes out of scope (make_unique)
+    auto pGain = std::make_unique<juce::AudioParameterFloat>("gain", "Gain", -24.0, 24.0, 0.0);
+    auto pPhase = std::make_unique<juce::AudioParameterBool>("phase", "Phase", false);
+    auto pChoice = std::make_unique<juce::AudioParameterChoice>("choice", "Choice", choices, 0);
+
+    params.push_back(std::move(pGain));
+    params.push_back(std::move(pPhase));
+    params.push_back(std::move(pChoice));
+
+    // Tip: plot waves here https://www.desmos.com/calculator
+
+    return { params.begin(), params.end() };
 }
 
 //==============================================================================
@@ -134,6 +154,9 @@ void IntrotutorialAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer
     juce::ScopedNoDenormals noDenormals;
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
+    float dbGain = *treeState.getRawParameterValue("gain");
+    float rawGain = juce::Decibels::decibelsToGain(dbGain);
+    bool shouldPhase = *treeState.getRawParameterValue("phase");
 
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
@@ -165,7 +188,11 @@ void IntrotutorialAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer
         auto* channelData = block.getChannelPointer(channel);
 
         for (int sample = 0; sample < block.getNumSamples(); ++sample) {
-            channelData[sample] *= 0.5;
+            if (shouldPhase) {
+                channelData[sample] *= rawGain * -1.0;
+            } else {
+                channelData[sample] *= rawGain;
+            }
         }
     }
 
@@ -182,7 +209,10 @@ bool IntrotutorialAudioProcessor::hasEditor() const
 
 juce::AudioProcessorEditor* IntrotutorialAudioProcessor::createEditor()
 {
-    return new IntrotutorialAudioProcessorEditor (*this);
+    //return new IntrotutorialAudioProcessorEditor (*this);
+
+    // This is a fast way to prototype DSP
+    return new juce::GenericAudioProcessorEditor(*this);
 }
 
 //==============================================================================
