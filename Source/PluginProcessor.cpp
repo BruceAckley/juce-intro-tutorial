@@ -22,10 +22,16 @@ IntrotutorialAudioProcessor::IntrotutorialAudioProcessor()
                        ), treeState(*this, nullptr, "PARAMETERS", createParameterLayout())
 #endif
 {
+    treeState.addParameterListener("gain", this);
+    treeState.addParameterListener("phase", this);
+    treeState.addParameterListener("choice", this);
 }
 
 IntrotutorialAudioProcessor::~IntrotutorialAudioProcessor()
 {
+    treeState.removeParameterListener("gain", this);
+    treeState.removeParameterListener("phase", this);
+    treeState.removeParameterListener("choice", this);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout IntrotutorialAudioProcessor::createParameterLayout()
@@ -46,6 +52,25 @@ juce::AudioProcessorValueTreeState::ParameterLayout IntrotutorialAudioProcessor:
     // Tip: plot waves here https://www.desmos.com/calculator
 
     return { params.begin(), params.end() };
+}
+
+void IntrotutorialAudioProcessor::parameterChanged(const juce::String& parameterID, float newValue) {
+    // This logic is what you don't want to happen 300 times a second or whatever.
+    // You're saying if the current param id changes, then do something.
+
+    DBG("value is: " << newValue); // console log
+
+    if (parameterID == "gain") {
+        rawGain = juce::Decibels::decibelsToGain(newValue);
+    }
+
+    if (parameterID == "phase") {
+        phase = newValue; // good enough, this is actually a bool
+    }
+
+    if (parameterID == "choice") {
+        // Do something
+    }
 }
 
 //==============================================================================
@@ -115,6 +140,9 @@ void IntrotutorialAudioProcessor::prepareToPlay (double sampleRate, int samplesP
 {
     // Use this method as the place to do any pre-playback
     // initialisation that you need..
+
+    phase = *treeState.getRawParameterValue("phase");
+    rawGain = juce::Decibels::decibelsToGain(static_cast<float>(*treeState.getRawParameterValue("gain")));
 }
 
 void IntrotutorialAudioProcessor::releaseResources()
@@ -154,9 +182,6 @@ void IntrotutorialAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer
     juce::ScopedNoDenormals noDenormals;
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
-    float dbGain = *treeState.getRawParameterValue("gain");
-    float rawGain = juce::Decibels::decibelsToGain(dbGain);
-    bool shouldPhase = *treeState.getRawParameterValue("phase");
 
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
@@ -188,7 +213,7 @@ void IntrotutorialAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer
         auto* channelData = block.getChannelPointer(channel);
 
         for (int sample = 0; sample < block.getNumSamples(); ++sample) {
-            if (shouldPhase) {
+            if (phase) {
                 channelData[sample] *= rawGain * -1.0;
             } else {
                 channelData[sample] *= rawGain;
@@ -221,12 +246,31 @@ void IntrotutorialAudioProcessor::getStateInformation (juce::MemoryBlock& destDa
     // You should use this method to store your parameters in the memory block.
     // You could do that either as raw data, or use the XML or ValueTree classes
     // as intermediaries to make it easy to save and load complex data.
+
+    // Called whenever you hit save
+
+    juce::MemoryOutputStream stream(destData, false);
+    treeState.state.writeToStream(stream);
 }
 
 void IntrotutorialAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     // You should use this method to restore your parameters from this memory block,
     // whose contents will have been created by the getStateInformation() call.
+
+    // Called whenever you load the live set
+
+    auto tree = juce::ValueTree::readFromData(data, size_t(sizeInBytes));
+
+    if (tree.isValid()) {
+        // Could get invalid if you have two versions of this plugin and you're making changes
+        // to one. It can do weird stuff.
+
+        treeState.state = tree;
+
+        phase = *treeState.getRawParameterValue("phase");
+        rawGain = juce::Decibels::decibelsToGain(static_cast<float>(*treeState.getRawParameterValue("gain")));
+    }
 }
 
 //==============================================================================

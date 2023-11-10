@@ -13,7 +13,7 @@
 //==============================================================================
 /**
 */
-class IntrotutorialAudioProcessor  : public juce::AudioProcessor
+class IntrotutorialAudioProcessor : public juce::AudioProcessor, juce::AudioProcessorValueTreeState::Listener
                             #if JucePlugin_Enable_ARA
                              , public juce::AudioProcessorARAExtension
                             #endif
@@ -60,8 +60,12 @@ public:
     juce::AudioProcessorValueTreeState treeState;
 
 private:
-    //==============================================================================
+    //==============================Parameters======================================
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    void parameterChanged(const juce::String& parameterId, float newValue) override;
+
+    float rawGain = 1.0;
+    bool phase = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (IntrotutorialAudioProcessor)
 };
